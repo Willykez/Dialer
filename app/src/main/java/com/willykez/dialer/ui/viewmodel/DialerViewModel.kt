@@ -209,6 +209,11 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun dial(number: String, accountHandle: PhoneAccountHandle?) {
         val context = getApplication<Application>()
+        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.CALL_PHONE)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
         val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
         val extras = if (accountHandle != null) {
             Bundle().apply {
@@ -217,7 +222,11 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             null
         }
-        telecomManager.placeCall(Uri.fromParts("tel", number, null), extras)
+        try {
+            telecomManager.placeCall(Uri.fromParts("tel", number, null), extras)
+        } catch (securityException: SecurityException) {
+            return
+        }
     }
 
     fun isDefaultDialer(): Boolean {

@@ -17,9 +17,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CallMade
-import androidx.compose.material.icons.filled.CallMissed
-import androidx.compose.material.icons.filled.CallReceived
+import androidx.compose.material.icons.automirrored.filled.CallMade
+import androidx.compose.material.icons.automirrored.filled.CallMissed
+import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -138,9 +138,9 @@ private fun RecentCallRow(
 @Composable
 private fun DirectionIcon(direction: CallDirection) {
     val (icon, tint) = when (direction) {
-        CallDirection.INCOMING -> Icons.Filled.CallReceived to MaterialTheme.colorScheme.onSurfaceVariant
-        CallDirection.OUTGOING -> Icons.Filled.CallMade to MaterialTheme.colorScheme.onSurfaceVariant
-        else -> Icons.Filled.CallMissed to AccentRed
+        CallDirection.INCOMING -> Icons.AutoMirrored.Filled.CallReceived to MaterialTheme.colorScheme.onSurfaceVariant
+        CallDirection.OUTGOING -> Icons.AutoMirrored.Filled.CallMade to MaterialTheme.colorScheme.onSurfaceVariant
+        else -> Icons.AutoMirrored.Filled.CallMissed to AccentRed
     }
     Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
 }

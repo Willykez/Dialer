@@ -96,7 +96,11 @@ class MainActivity : ComponentActivity() {
                 val ringtoneLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult()
                 ) { result ->
-                    val uri = result.data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+                    val uri = result.data?.let {
+                        androidx.core.content.IntentCompat.getParcelableExtra(
+                            it, RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java
+                        )
+                    }
                     app.settingsRepository.setRingtoneUri(uri)
                 }
 

@@ -18,7 +18,7 @@ class DialerInCallService : InCallService() {
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         CallManager.onCallAdded(call)
-        if (call.state == Call.STATE_RINGING) {
+        if (call.details?.state == Call.STATE_RINGING) {
             CallNotifications.showIncomingCall(applicationContext, call)
         } else {
             CallNotifications.showOngoingCall(applicationContext, call)

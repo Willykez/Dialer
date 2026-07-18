@@ -17,10 +17,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -58,7 +58,7 @@ fun ContactDetailScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
             Spacer(modifier = Modifier.weight(1f))
             IconButton(onClick = onToggleFavorite) {
@@ -89,7 +89,7 @@ fun ContactDetailScreen(
 
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 QuickAction(icon = Icons.Filled.Call, label = "Call") { onCall(contact.primaryNumber) }
-                QuickAction(icon = Icons.Filled.Message, label = "Message") { onMessage(contact.primaryNumber) }
+                QuickAction(icon = Icons.AutoMirrored.Filled.Message, label = "Message") { onMessage(contact.primaryNumber) }
                 QuickAction(icon = Icons.Filled.MusicNote, label = "Ringtone") { onPickRingtone() }
                 QuickAction(
                     icon = Icons.Filled.Block,
