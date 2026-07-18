@@ -171,12 +171,8 @@ object CallManager {
 
     fun setSpeakerOn(enabled: Boolean) {
         val route = if (enabled) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_EARPIECE
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            service?.setAudioRoute(route, null)
-        } else {
-            @Suppress("DEPRECATION")
-            service?.setAudioRoute(route)
-        }
+        @Suppress("DEPRECATION")
+        service?.setAudioRoute(route)
         _uiState.value = _uiState.value?.copy(isSpeakerOn = enabled)
     }
 
