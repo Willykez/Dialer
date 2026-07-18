@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.willykez.dialer.telecom
 
 import android.telecom.Call
@@ -18,7 +20,7 @@ class DialerInCallService : InCallService() {
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         CallManager.onCallAdded(call)
-        if (call.details?.state == Call.STATE_RINGING) {
+        if (call.state == Call.STATE_RINGING) {
             CallNotifications.showIncomingCall(applicationContext, call)
         } else {
             CallNotifications.showOngoingCall(applicationContext, call)

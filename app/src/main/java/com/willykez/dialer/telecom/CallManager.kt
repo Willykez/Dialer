@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.willykez.dialer.telecom
 
 import android.content.Context
@@ -50,7 +52,7 @@ object CallManager {
     }
 
     fun onCallAdded(call: Call) {
-        if (primaryCall == null || primaryCall?.details?.state == Call.STATE_DISCONNECTED) {
+        if (primaryCall == null || primaryCall?.state == Call.STATE_DISCONNECTED) {
             primaryCall = call
         } else if (secondaryCall == null) {
             secondaryCall = call
@@ -82,7 +84,7 @@ object CallManager {
         val number = details?.handle?.schemeSpecificPart.orEmpty()
         val callerName = details?.callerDisplayName?.takeIf { it.isNotBlank() } ?: number
 
-        val status = when (details?.state) {
+        val status = when (call.state) {
             Call.STATE_RINGING -> InCallStatus.RINGING_INCOMING
             Call.STATE_DIALING, Call.STATE_CONNECTING -> InCallStatus.RINGING_OUTGOING
             Call.STATE_ACTIVE -> InCallStatus.ACTIVE
@@ -103,7 +105,7 @@ object CallManager {
                 ?: System.currentTimeMillis(),
             isMuted = existing?.isMuted ?: false,
             isSpeakerOn = existing?.isSpeakerOn ?: false,
-            isOnHold = details?.state == Call.STATE_HOLDING,
+            isOnHold = call.state == Call.STATE_HOLDING,
             canAddCall = details?.can(Call.Details.CAPABILITY_HOLD) == true,
             simLabel = simLabel,
             isMultiSim = hasMultipleSims()
@@ -157,7 +159,7 @@ object CallManager {
 
     fun toggleHold() {
         val call = primaryCall ?: return
-        if (call.details?.state == Call.STATE_HOLDING) {
+        if (call.state == Call.STATE_HOLDING) {
             call.unhold()
         } else {
             call.hold()
@@ -171,7 +173,6 @@ object CallManager {
 
     fun setSpeakerOn(enabled: Boolean) {
         val route = if (enabled) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_EARPIECE
-        @Suppress("DEPRECATION")
         service?.setAudioRoute(route)
         _uiState.value = _uiState.value?.copy(isSpeakerOn = enabled)
     }
