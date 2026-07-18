@@ -10,7 +10,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,15 +31,15 @@ fun ContactAvatar(
 ) {
     val context = LocalContext.current
     val bitmapState = produceState<android.graphics.Bitmap?>(initialValue = null, key1 = photoUri) {
-        value = if (photoUri.isNullOrBlank()) {
-            null
-        } else {
-            withContext(Dispatchers.IO) {
+        value = null
+        if (!photoUri.isNullOrBlank()) {
+            val loaded = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openInputStream(android.net.Uri.parse(photoUri))
                         ?.use { BitmapFactory.decodeStream(it) }
                 }.getOrNull()
             }
+            value = loaded
         }
     }
 
