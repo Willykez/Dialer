@@ -35,13 +35,24 @@ To receive and place real cellular calls through this app's UI, set it as the de
 ./gradlew assembleDebug
 ```
 
-(No Gradle wrapper jar is committed; run `gradle wrapper` once with a local Gradle install, or let
-the CI workflow's `gradle/actions/setup-gradle` handle it.)
+The Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/`) is committed, pinned to Gradle 8.9.
 
 ## CI
 
-`.github/workflows/android-ci.yml` runs lint, unit tests, and assembles a debug APK on every push and
-pull request to `main`.
+`.github/workflows/android-ci.yml` has two jobs:
+
+- **debug-build** — runs on every push/PR to `main`: lint, unit tests, and an unsigned-look debug APK
+  (signed with the committed `debug.keystore`, restored from `debug.keystore.base64` at CI time).
+- **release-build** — generates a throwaway signing keystore at build time via `keytool`, builds a
+  signed release APK using it, uploads the APK as an artifact, and on a `v*` tag also publishes it as
+  a GitHub Release. The release signing config is read from Gradle project properties
+  (`DIALER_RELEASE_STORE_FILE`, `DIALER_RELEASE_STORE_PASSWORD`, `DIALER_RELEASE_KEY_ALIAS`,
+  `DIALER_RELEASE_KEY_PASSWORD`) — see `app/build.gradle.kts`.
+
+  Note: the release job's keystore is generated fresh on every run, so release APKs across different
+  runs are **not** signed with the same key. For a real Play Store release, replace that step with a
+  stored, persistent signing key (e.g. a repository secret holding a base64 keystore) so the app can be
+  updated in place.
 
 ## Notes and limitations
 

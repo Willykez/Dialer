@@ -21,12 +21,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("KEYSTORE_PATH")
-            if (keystorePath != null) {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("STORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
-                keyPassword = System.getenv("KEY_PASSWORD")
+            val storeFilePath = project.findProperty("DIALER_RELEASE_STORE_FILE") as String?
+            if (storeFilePath != null) {
+                storeFile = file(storeFilePath)
+                storePassword = project.findProperty("DIALER_RELEASE_STORE_PASSWORD") as String?
+                keyAlias = project.findProperty("DIALER_RELEASE_KEY_ALIAS") as String? ?: "dialer"
+                keyPassword = project.findProperty("DIALER_RELEASE_KEY_PASSWORD") as String?
             }
         }
         create("debugConfig") {
@@ -42,10 +42,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (System.getenv("KEYSTORE_PATH") != null) {
-                signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (project.hasProperty("DIALER_RELEASE_STORE_FILE")) {
+                signingConfigs.getByName("release")
             } else {
-                signingConfig = signingConfigs.getByName("debugConfig")
+                signingConfigs.getByName("debugConfig")
             }
         }
         debug {

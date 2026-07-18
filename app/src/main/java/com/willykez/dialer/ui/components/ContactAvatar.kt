@@ -2,7 +2,6 @@ package com.willykez.dialer.ui.components
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -11,8 +10,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,23 +34,18 @@ fun ContactAvatar(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    val bitmapState by produceState<Bitmap?>(
-        initialValue = null,
-        key1 = photoUri
-    ) {
-        value = if (photoUri.isNullOrBlank()) {
-            null
-        } else {
-            withContext(Dispatchers.IO) {
+    LaunchedEffect(photoUri) {
+        bitmap = null
+        if (!photoUri.isNullOrBlank()) {
+            val loaded = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver
-                        .openInputStream(Uri.parse(photoUri))
-                        ?.use { input ->
-                            BitmapFactory.decodeStream(input)
-                        }
+                    context.contentResolver.openInputStream(android.net.Uri.parse(photoUri))
+                        ?.use { BitmapFactory.decodeStream(it) }
                 }.getOrNull()
             }
+            bitmap = loaded
         }
     }
 
@@ -59,15 +56,12 @@ fun ContactAvatar(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center
     ) {
-        val bitmap = bitmapState
-
-        if (bitmap != null) {
+        val loadedBitmap = bitmap
+        if (loadedBitmap != null) {
             Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "Contact avatar",
-                modifier = Modifier
-                    .size(size)
-                    .clip(CircleShape)
+                bitmap = loadedBitmap.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.size(size).clip(CircleShape)
             )
         } else {
             Text(
