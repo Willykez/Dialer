@@ -38,7 +38,6 @@ import com.willykez.dialer.ui.theme.AccentRed
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.compose.foundation.layout.weight
 
 @Composable
 fun RecentsScreen(

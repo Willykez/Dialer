@@ -33,7 +33,6 @@ import androidx.compose.ui.unit.sp
 import com.willykez.dialer.data.model.Contact
 import com.willykez.dialer.ui.components.ContactAvatar
 import com.willykez.dialer.ui.theme.AccentGreen
-import androidx.compose.foundation.layout.weight
 
 @Composable
 fun DialpadScreen(

@@ -32,7 +32,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.willykez.dialer.ui.viewmodel.DialerViewModel
-import androidx.compose.foundation.layout.weight
 
 private data class NavTab(
     val tab: DialerViewModel.HomeTab,

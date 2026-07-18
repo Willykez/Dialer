@@ -30,7 +30,6 @@ import androidx.compose.foundation.clickable
 import com.willykez.dialer.data.model.Contact
 import com.willykez.dialer.ui.components.ContactAvatar
 import com.willykez.dialer.ui.recents.EmptyState
-import androidx.compose.foundation.layout.weight
 
 @Composable
 fun SearchScreen(

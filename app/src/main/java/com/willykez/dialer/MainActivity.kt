@@ -16,12 +16,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -162,7 +163,7 @@ class MainActivity : ComponentActivity() {
                                                 )
                                                 androidx.compose.material3.IconButton(onClick = { screen = Screen.Settings }) {
                                                     androidx.compose.material3.Icon(
-                                                        androidx.compose.material.icons.Icons.Filled.Settings,
+                                                        Icons.Filled.Settings,
                                                         contentDescription = "Settings"
                                                     )
                                                 }

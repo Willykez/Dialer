@@ -49,7 +49,6 @@ import com.willykez.dialer.ui.components.ContactAvatar
 import com.willykez.dialer.ui.dialpad.DialpadKeys
 import com.willykez.dialer.ui.theme.AccentGreen
 import com.willykez.dialer.ui.theme.AccentRed
-import androidx.compose.foundation.layout.weight
 
 @Composable
 fun CallScreen(

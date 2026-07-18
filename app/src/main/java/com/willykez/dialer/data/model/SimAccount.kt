@@ -7,5 +7,5 @@ data class SimAccount(
     val label: String
 ) {
     val storageKey: String
-        get() = "${handle.component.flattenToString()}|${handle.id}"
+        get() = "${handle.componentName.flattenToString()}|${handle.id}"
 }

@@ -36,7 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.willykez.dialer.data.model.Contact
 import com.willykez.dialer.ui.components.ContactAvatar
-import androidx.compose.foundation.layout.weight
 
 @Composable
 fun ContactDetailScreen(
