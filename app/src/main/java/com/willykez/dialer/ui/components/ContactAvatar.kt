@@ -1,6 +1,8 @@
 package com.willykez.dialer.ui.components
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -30,16 +32,23 @@ fun ContactAvatar(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val bitmapState = produceState<android.graphics.Bitmap?>(initialValue = null, key1 = photoUri) {
-        value = null
-        if (!photoUri.isNullOrBlank()) {
-            val loaded = withContext(Dispatchers.IO) {
+
+    val bitmapState by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = photoUri
+    ) {
+        value = if (photoUri.isNullOrBlank()) {
+            null
+        } else {
+            withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.openInputStream(android.net.Uri.parse(photoUri))
-                        ?.use { BitmapFactory.decodeStream(it) }
+                    context.contentResolver
+                        .openInputStream(Uri.parse(photoUri))
+                        ?.use { input ->
+                            BitmapFactory.decodeStream(input)
+                        }
                 }.getOrNull()
             }
-            value = loaded
         }
     }
 
@@ -50,12 +59,15 @@ fun ContactAvatar(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center
     ) {
-        val bitmap = bitmapState.value
+        val bitmap = bitmapState
+
         if (bitmap != null) {
             Image(
                 bitmap = bitmap.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.size(size).clip(CircleShape)
+                contentDescription = "Contact avatar",
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape)
             )
         } else {
             Text(
