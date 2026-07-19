@@ -49,7 +49,7 @@ class CallLogRepository(private val context: Context) {
             projection,
             null,
             null,
-            "${CallLog.Calls.DATE} DESC LIMIT $limit"
+            "${CallLog.Calls.DATE} DESC"
         )?.use { cursor ->
             val idIdx = cursor.getColumnIndexOrThrow(CallLog.Calls._ID)
             val numberIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)
@@ -60,7 +60,7 @@ class CallLogRepository(private val context: Context) {
             val durationIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION)
             val phoneAccountIdIdx = cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID)
 
-            while (cursor.moveToNext()) {
+            while (cursor.moveToNext() && entries.size < limit) {
                 val type = cursor.getInt(typeIdx)
                 val direction = when (type) {
                     CallLog.Calls.INCOMING_TYPE -> CallDirection.INCOMING
