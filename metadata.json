@@ -1,6 +1,0 @@
-{
-  "name": "AMOLED Dialer",
-  "description": "AMOLED Dark Theme Dialer App with dynamic morphing bottom navigation, T9 matrix touch dialer, global high-definition search with yellow highlights, and full-screen immersive dialing visual grids.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
