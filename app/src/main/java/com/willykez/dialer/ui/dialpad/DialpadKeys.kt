@@ -2,24 +2,29 @@
 
 package com.willykez.dialer.ui.dialpad
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
@@ -43,6 +48,12 @@ private val keys = listOf(
     DialKey('#', "")
 )
 
+/**
+ * A Material 3 Expressive T9 keypad: keys "melt" from circles into rounder squircles under
+ * finger pressure (a subtle morph, echoing the liquid-glass motion used in the nav pill),
+ * with per-key press scale + haptic tick, matching the tactile feel of the modern
+ * Google Phone / Pixel dialer keypad.
+ */
 @Composable
 fun DialpadKeys(
     onDigit: (Char) -> Unit,
@@ -55,7 +66,7 @@ fun DialpadKeys(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         keys.chunked(3).forEach { row ->
@@ -90,13 +101,40 @@ private fun DialKeyButton(
     onClick: () -> Unit,
     onLongPress: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    // Expressive "liquid" morph: rounder squircle + slight shrink while pressed.
+    val cornerRadius by animateFloatAsState(
+        targetValue = if (isPressed) size.value * 0.30f else size.value * 0.5f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f),
+        label = "key_corner"
+    )
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.90f else 1f,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = 500f),
+        label = "key_scale"
+    )
+    val containerColor by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 380f),
+        label = "key_color"
+    )
+
     Box(
         modifier = Modifier
             .size(size)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .scale(pressScale)
+            .clip(RoundedCornerShape(cornerRadius.dp))
+            .background(
+                androidx.compose.ui.graphics.lerp(
+                    MaterialTheme.colorScheme.surfaceContainer,
+                    MaterialTheme.colorScheme.primaryContainer,
+                    containerColor
+                )
+            )
             .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interactionSource,
                 indication = ripple(),
                 onClick = onClick,
                 onLongClick = onLongPress
@@ -113,7 +151,8 @@ private fun DialKeyButton(
                 Text(
                     text = key.letters,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = (size.value / 7f).sp
+                    fontSize = (size.value / 7f).sp,
+                    letterSpacing = 1.5.sp
                 )
             }
         }

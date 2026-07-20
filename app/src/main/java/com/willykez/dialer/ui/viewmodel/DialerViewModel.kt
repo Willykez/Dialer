@@ -93,16 +93,37 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
         if (digits.isBlank()) {
             emptyList()
         } else {
-            contacts.filter { contact ->
-                contact.numbers.any { it.number.filter { c -> c.isDigit() }.contains(digits) } ||
-                    matchesT9(contact.displayName, digits)
-            }
+            contacts
+                .mapNotNull { contact -> t9Rank(contact, digits)?.let { rank -> rank to contact } }
+                .sortedWith(compareBy({ it.first }, { it.second.displayName }))
+                .map { it.second }
+                .take(20)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private fun matchesT9(name: String, digits: String): Boolean {
-        val t9 = name.lowercase().map { letterToDigit(it) }.joinToString("")
-        return t9.contains(digits)
+    /**
+     * Google Phone-style "smart dial" ranking, lower is better:
+     *   0 = a number starts with the typed digits
+     *   1 = the T9 code of a name word (first/last/nickname) starts with the digits
+     *   2 = the T9 code of the whole name starts with the digits
+     *   3 = digits appear anywhere in a number
+     *   4 = digits appear anywhere in the T9 code of the name
+     *   null = no match at all
+     */
+    private fun t9Rank(contact: Contact, digits: String): Int? {
+        val numberDigitsList = contact.numbers.map { it.number.filter { c -> c.isDigit() } }
+        val fullT9 = contact.displayName.lowercase().map { letterToDigit(it) }.joinToString("")
+        val wordT9s = contact.displayName.lowercase().split(" ", "-", ".").filter { it.isNotBlank() }
+            .map { word -> word.map { letterToDigit(it) }.joinToString("") }
+
+        return when {
+            numberDigitsList.any { it.startsWith(digits) } -> 0
+            wordT9s.any { it.startsWith(digits) } -> 1
+            fullT9.startsWith(digits) -> 2
+            numberDigitsList.any { it.contains(digits) } -> 3
+            fullT9.contains(digits) -> 4
+            else -> null
+        }
     }
 
     private fun letterToDigit(c: Char): Char = when (c) {
@@ -167,6 +188,12 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     fun toggleFavorite(contact: Contact) {
         viewModelScope.launch {
             app.contactsRepository.setFavorite(contact.contactId, !contact.isFavorite)
+        }
+    }
+
+    fun deleteCallLogEntry(id: Long) {
+        viewModelScope.launch {
+            app.callLogRepository.deleteEntry(id)
         }
     }
 

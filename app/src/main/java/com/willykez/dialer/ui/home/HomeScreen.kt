@@ -26,6 +26,7 @@ fun HomeScreen(
     onCall: (String) -> Unit,
     onOpenContact: (Contact) -> Unit,
     onOpenCallDetail: (CallLogEntry) -> Unit,
+    onDeleteCall: (CallLogEntry) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     when (activeTab) {
@@ -39,6 +40,7 @@ fun HomeScreen(
             onOpenSettings = onOpenSettings,
             onCall = onCall,
             onOpenDetail = onOpenCallDetail,
+            onDeleteCall = onDeleteCall,
             modifier = modifier.fillMaxSize()
         )
         DialerViewModel.HomeTab.CONTACTS -> ContactsScreen(

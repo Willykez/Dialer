@@ -1,24 +1,28 @@
 package com.willykez.dialer.ui.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -31,23 +35,43 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.willykez.dialer.ui.viewmodel.DialerViewModel
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
+/**
+ * The primary bottom pill: [dialpad glass button] — [liquid-glass sliding segmented pill] — [search glass button].
+ *
+ * The center pill can be tapped OR dragged horizontally, iOS-Control-Center-style: the thumb
+ * follows your finger with rubber-band resistance past the edges, "melts" between the two
+ * segments as it slides (labels/icons scale + fade based on proximity to the thumb), and
+ * snaps home with a bouncy spring + haptic tick on release.
+ */
 @Composable
 fun NavigationDock(
     activeTab: DialerViewModel.HomeTab,
@@ -58,6 +82,26 @@ fun NavigationDock(
     onSearchToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+
+    // 0f == Recents, 1f == Contacts. Drives the sliding glass thumb.
+    val progress = remember { Animatable(if (activeTab == DialerViewModel.HomeTab.CONTACTS) 1f else 0f) }
+    var lastHapticStep by remember { mutableFloatStateOf(progress.value) }
+
+    LaunchedEffect(activeTab) {
+        val target = if (activeTab == DialerViewModel.HomeTab.CONTACTS) 1f else 0f
+        if (kotlin.math.abs(progress.value - target) > 0.01f) {
+            progress.animateTo(
+                target,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
+        }
+    }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -67,57 +111,129 @@ fun NavigationDock(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(if (isDialpadOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { onDialpadToggle() },
-            contentAlignment = Alignment.Center
-        ) {
-            T9DotsGrid(color = if (isDialpadOpen) Color.Black else MaterialTheme.colorScheme.onBackground)
-        }
+        GlassCircleButton(
+            active = isDialpadOpen,
+            onClick = onDialpadToggle,
+            contentDescription = "Dialpad"
+        ) { tint -> T9DotsGrid(color = tint) }
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        Row(
+        BoxWithConstraints(
             modifier = Modifier
                 .height(56.dp)
                 .weight(1f)
-                .clip(RoundedCornerShape(28.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            DockSegment(
-                label = "Recents",
-                selected = activeTab == DialerViewModel.HomeTab.RECENTS,
-                onClick = { onTabSelected(DialerViewModel.HomeTab.RECENTS) },
-                icon = { color -> ClockIcon(color = color, size = 20.dp) }
-            )
-            DockSegment(
-                label = "Contacts",
-                selected = activeTab == DialerViewModel.HomeTab.CONTACTS,
-                onClick = { onTabSelected(DialerViewModel.HomeTab.CONTACTS) },
-                icon = { color -> AddressBookIcon(color = color, size = 20.dp) }
-            )
+            val pillWidthPx = constraints.maxWidth.toFloat()
+            val segmentWidthPx = pillWidthPx / 2f
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(
+                        // Frosted glass base: translucent surface + faint top-light gradient.
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f)
+                            )
+                        )
+                    )
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.18f), Color.Transparent)
+                        ),
+                        shape = RoundedCornerShape(28.dp)
+                    )
+                    .pointerInput(pillWidthPx) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                val snapped = if (progress.value > 0.5f) 1f else 0f
+                                scope.launch {
+                                    progress.animateTo(
+                                        snapped,
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                            stiffness = Spring.StiffnessMediumLow
+                                        )
+                                    )
+                                }
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onTabSelected(
+                                    if (snapped == 1f) DialerViewModel.HomeTab.CONTACTS
+                                    else DialerViewModel.HomeTab.RECENTS
+                                )
+                            },
+                            onDragCancel = {},
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                val deltaFraction = dragAmount / pillWidthPx
+                                val next = (progress.value + deltaFraction).coerceIn(-0.18f, 1.18f)
+                                scope.launch { progress.snapTo(next) }
+                                // Light "detent" tick as the thumb crosses the midpoint.
+                                val step = if (next > 0.5f) 1f else 0f
+                                if (step != lastHapticStep) {
+                                    lastHapticStep = step
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                            }
+                        )
+                    }
+            ) {
+                // Sliding liquid-glass thumb, clamped so it never fully escapes the pill visually.
+                val clampedProgress = progress.value.coerceIn(0f, 1f)
+                val overshoot = progress.value - clampedProgress // rubber-band feedback past 0/1
+                val thumbWidthDp = with(androidx.compose.ui.platform.LocalDensity.current) {
+                    (segmentWidthPx - 8f).toDp()
+                }
+                val thumbOffsetPx = (clampedProgress * segmentWidthPx) + 4f + (overshoot * segmentWidthPx * 0.3f)
+
+                Box(
+                    modifier = Modifier
+                        .offset { androidx.compose.ui.unit.IntOffset(thumbOffsetPx.roundToInt(), 0) }
+                        .fillMaxHeight()
+                        .width(thumbWidthDp)
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
+                )
+
+                Row(modifier = Modifier.fillMaxSize()) {
+                    DockSegment(
+                        label = "Recents",
+                        thumbDistance = kotlin.math.abs(progress.value - 0f),
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onTabSelected(DialerViewModel.HomeTab.RECENTS)
+                        },
+                        icon = { color -> ClockIcon(color = color, size = 20.dp) }
+                    )
+                    DockSegment(
+                        label = "Contacts",
+                        thumbDistance = kotlin.math.abs(progress.value - 1f),
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onTabSelected(DialerViewModel.HomeTab.CONTACTS)
+                        },
+                        icon = { color -> AddressBookIcon(color = color, size = 20.dp) }
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(if (isSearchOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { onSearchToggle() },
-            contentAlignment = Alignment.Center
-        ) {
+        GlassCircleButton(
+            active = isSearchOpen,
+            onClick = onSearchToggle,
+            contentDescription = "Search Contacts"
+        ) { tint ->
             Icon(
                 imageVector = Icons.Default.Search,
-                contentDescription = "Search Contacts",
-                tint = if (isSearchOpen) Color.Black else MaterialTheme.colorScheme.onBackground,
+                contentDescription = null,
+                tint = tint,
                 modifier = Modifier.size(24.dp)
             )
         }
@@ -125,34 +241,63 @@ fun NavigationDock(
 }
 
 @Composable
+private fun GlassCircleButton(
+    active: Boolean,
+    onClick: () -> Unit,
+    contentDescription: String,
+    content: @Composable (Color) -> Unit
+) {
+    val background = if (active) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f)
+    }
+    val tint = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onBackground
+
+    Box(
+        modifier = Modifier
+            .size(56.dp)
+            .clip(CircleShape)
+            .background(background)
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent)),
+                shape = CircleShape
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = true),
+                onClickLabel = contentDescription,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        content(tint)
+    }
+}
+
+@Composable
 private fun RowScope.DockSegment(
     label: String,
-    selected: Boolean,
+    thumbDistance: Float,
     onClick: () -> Unit,
     icon: @Composable (Color) -> Unit
 ) {
-    val segmentWeight = if (selected) 1.5f else 0.8f
-    val background by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
-        label = "segment_bg"
+    // "Liquid" proximity effect: content nearest the glass thumb is brightest & largest,
+    // mimicking iOS liquid-glass magnification as the thumb slides underneath it.
+    val closeness = (1f - thumbDistance.coerceIn(0f, 1f))
+    val contentColor = androidx.compose.ui.graphics.lerp(
+        MaterialTheme.colorScheme.onSurfaceVariant,
+        MaterialTheme.colorScheme.onPrimary,
+        closeness
     )
-    val contentColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
-        label = "segment_color"
-    )
+    val scale = 0.94f + (closeness * 0.10f)
 
     Row(
         modifier = Modifier
-            .weight(segmentWeight)
+            .weight(1f)
             .fillMaxHeight()
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                )
-            )
-            .clip(RoundedCornerShape(24.dp))
-            .background(background)
+            .scale(scale)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -162,7 +307,7 @@ private fun RowScope.DockSegment(
         horizontalArrangement = Arrangement.Center
     ) {
         icon(contentColor)
-        if (selected) {
+        if (closeness > 0.45f) {
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,

@@ -1,17 +1,24 @@
 package com.willykez.dialer.ui.contacts
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
@@ -25,16 +32,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.willykez.dialer.data.model.Contact
 import com.willykez.dialer.ui.components.ContactRowItem
 import com.willykez.dialer.ui.recents.EmptyState
 import com.willykez.dialer.ui.recents.PermissionPrompt
+import kotlinx.coroutines.launch
 
 @Composable
 fun ContactsScreen(
@@ -105,47 +119,103 @@ fun ContactsScreen(
             .groupBy { it.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "#" }
             .toSortedMap()
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 100.dp)
-        ) {
+        // Flat list of (sectionHeader?, contact?) so we can map a letter -> the item index
+        // it starts at, for the fast-scroll index on the right edge.
+        data class Row(val header: String? = null, val contact: Contact? = null)
+
+        val flatItems = buildList {
             if (favorites.isNotEmpty()) {
-                item {
-                    Column {
-                        SectionHeader("Favorite Contacts")
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            favorites.forEach { favorite ->
-                                ContactRowItem(
-                                    primaryText = favorite.displayName,
-                                    secondaryText = favorite.primaryNumber,
-                                    photoUri = favorite.photoUri,
-                                    onCallClick = { onOpenContact(favorite) },
-                                    onClick = { onOpenContact(favorite) }
-                                )
-                            }
+                add(Row(header = "Favorite Contacts"))
+                favorites.forEach { add(Row(contact = it)) }
+            }
+            grouped.forEach { (header, itemsInGroup) ->
+                add(Row(header = header))
+                itemsInGroup.forEach { add(Row(contact = it)) }
+            }
+        }
+        val letterIndexPositions = remember(grouped.keys) {
+            var runningIndex = if (favorites.isNotEmpty()) 1 + favorites.size else 0
+            val map = linkedMapOf<String, Int>()
+            grouped.forEach { (header, itemsInGroup) ->
+                map[header] = runningIndex
+                runningIndex += 1 + itemsInGroup.size
+            }
+            map
+        }
+
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+        val haptics = LocalHapticFeedback.current
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(end = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 100.dp)
+            ) {
+                items(flatItems.size) { index ->
+                    val row = flatItems[index]
+                    when {
+                        row.header != null -> {
+                            SectionHeader(row.header)
+                        }
+                        row.contact != null -> {
+                            ContactRowItem(
+                                primaryText = row.contact.displayName,
+                                secondaryText = row.contact.primaryNumber,
+                                photoUri = row.contact.photoUri,
+                                onCallClick = { onOpenContact(row.contact) },
+                                onClick = { onOpenContact(row.contact) }
+                            )
                         }
                     }
                 }
             }
 
-            grouped.forEach { (header, itemsInGroup) ->
-                item {
-                    Column {
-                        SectionHeader(header)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            itemsInGroup.forEach { contact ->
-                                ContactRowItem(
-                                    primaryText = contact.displayName,
-                                    secondaryText = contact.primaryNumber,
-                                    photoUri = contact.photoUri,
-                                    onCallClick = { onOpenContact(contact) },
-                                    onClick = { onOpenContact(contact) }
-                                )
+            // Fast-scroll A-Z index, One UI / classic Contacts app style: drag down the
+            // right edge to jump straight to a letter section, with a haptic tick per letter.
+            if (letterIndexPositions.isNotEmpty()) {
+                var activeLetter by remember { mutableStateOf<String?>(null) }
+                val letters = letterIndexPositions.keys.toList()
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .width(24.dp)
+                        .padding(vertical = 8.dp)
+                        .pointerInput(letters) {
+                            detectVerticalDragGestures(
+                                onDragEnd = { activeLetter = null },
+                                onDragCancel = { activeLetter = null }
+                            ) { change, _ ->
+                                change.consume()
+                                val fraction = (change.position.y / size.height).coerceIn(0f, 0.999f)
+                                val letter = letters[(fraction * letters.size).toInt()]
+                                if (letter != activeLetter) {
+                                    activeLetter = letter
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    letterIndexPositions[letter]?.let { targetIndex ->
+                                        scope.launch { listState.scrollToItem(targetIndex) }
+                                    }
+                                }
                             }
-                        }
+                        },
+                    verticalArrangement = Arrangement.SpaceEvenly,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    letters.forEach { letter ->
+                        Text(
+                            text = letter,
+                            fontSize = 10.sp,
+                            fontWeight = if (letter == activeLetter) FontWeight.Bold else FontWeight.Normal,
+                            color = if (letter == activeLetter) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
                     }
                 }
             }

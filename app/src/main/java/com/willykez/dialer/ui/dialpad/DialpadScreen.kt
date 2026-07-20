@@ -1,5 +1,10 @@
 package com.willykez.dialer.ui.dialpad
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,8 +23,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,11 +53,22 @@ fun DialpadScreen(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        Box(modifier = Modifier.fillMaxWidth().height(64.dp), contentAlignment = Alignment.Center) {
+        // Drag handle, echoing the sheet-like presentation of the dialpad.
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .size(width = 36.dp, height = 4.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Box(modifier = Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) {
             Text(
                 text = digits.ifEmpty { "" },
                 style = MaterialTheme.typography.displaySmall,
@@ -62,23 +78,30 @@ fun DialpadScreen(
             )
         }
 
-        if (digits.isNotEmpty() && matchingContacts.isNotEmpty()) {
+        // Google Phone-style smart-dial suggestions: ranked live as digits are typed.
+        AnimatedVisibility(
+            visible = digits.isNotEmpty() && matchingContacts.isNotEmpty(),
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 180.dp)
+                    .heightIn(max = 200.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 items(matchingContacts, key = { it.contactId }) { contact ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
                             .clickable { onContactPicked(contact) }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 8.dp, horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         ContactAvatar(photoUri = contact.photoUri, initials = contact.initials, size = 40.dp)
                         Spacer(modifier = Modifier.width(12.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(contact.displayName, color = MaterialTheme.colorScheme.onBackground)
                             Text(
                                 contact.primaryNumber,
@@ -86,12 +109,27 @@ fun DialpadScreen(
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .clickable { onContactPicked(contact) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Filled.Call,
+                                contentDescription = "Call ${contact.displayName}",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         DialpadKeys(onDigit = onDigit, onLongPressZero = onLongBackspace, keySize = 72.dp)
 
@@ -107,12 +145,16 @@ fun DialpadScreen(
             Box(
                 modifier = Modifier
                     .size(76.dp)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(28.dp))
                     .background(MaterialTheme.colorScheme.primary)
                     .clickable(enabled = digits.isNotEmpty()) { onCall() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.Call, contentDescription = "Call", tint = androidx.compose.ui.graphics.Color.White)
+                Icon(
+                    Icons.Filled.Call,
+                    contentDescription = "Call",
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
             }
 
             Box(modifier = Modifier.size(76.dp), contentAlignment = Alignment.Center) {

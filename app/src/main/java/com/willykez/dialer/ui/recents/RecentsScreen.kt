@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.willykez.dialer.ui.recents
 
 import androidx.compose.foundation.BorderStroke
@@ -14,12 +16,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.stickyHeader
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -30,7 +34,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,7 +45,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -63,6 +73,7 @@ fun RecentsScreen(
     onOpenSettings: () -> Unit,
     onCall: (String) -> Unit,
     onOpenDetail: (CallLogEntry) -> Unit,
+    onDeleteCall: (CallLogEntry) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -118,9 +129,12 @@ fun RecentsScreen(
             return
         }
 
+        // Group like Google Phone / One UI call log: Today, Yesterday, then calendar dates.
+        val grouped = calls.groupBy { dayBucket(it.timestamp) }
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             contentPadding = PaddingValues(bottom = 100.dp)
         ) {
             if (!isDefaultDialer) {
@@ -129,37 +143,131 @@ fun RecentsScreen(
                 }
             }
 
-            items(calls, key = { it.id }) { entry ->
-                val isMissed = entry.direction == CallDirection.MISSED || entry.direction == CallDirection.REJECTED
-                val arrow = if (entry.direction == CallDirection.OUTGOING) {
-                    CallDirectionArrow.OUTGOING
-                } else {
-                    CallDirectionArrow.INCOMING
-                }
-                val simLabel = simLabels[entry.phoneAccountId]
-                val detailText = buildString {
-                    append(formatLogTimestamp(entry.timestamp))
-                    if (entry.durationSeconds > 0) {
-                        append(" \u2022 ")
-                        append(formatDuration(entry.durationSeconds))
-                    }
-                    if (!simLabel.isNullOrBlank()) {
-                        append(" \u2022 ")
-                        append(simLabel)
+            grouped.forEach { (bucket, entries) ->
+                stickyHeader {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = bucket,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
 
-                ContactRowItem(
-                    primaryText = entry.displayName,
-                    secondaryText = detailText,
-                    photoUri = entry.photoUri,
-                    isMissed = isMissed,
-                    directionArrow = arrow,
-                    onCallClick = { onCall(entry.number) },
-                    onClick = { onOpenDetail(entry) }
-                )
+                items(entries, key = { it.id }) { entry ->
+                    val isMissed = entry.direction == CallDirection.MISSED || entry.direction == CallDirection.REJECTED
+                    val arrow = if (entry.direction == CallDirection.OUTGOING) {
+                        CallDirectionArrow.OUTGOING
+                    } else {
+                        CallDirectionArrow.INCOMING
+                    }
+                    val simLabel = simLabels[entry.phoneAccountId]
+                    val detailText = buildString {
+                        append(formatLogTimestamp(entry.timestamp))
+                        if (entry.durationSeconds > 0) {
+                            append(" \u2022 ")
+                            append(formatDuration(entry.durationSeconds))
+                        }
+                        if (!simLabel.isNullOrBlank()) {
+                            append(" \u2022 ")
+                            append(simLabel)
+                        }
+                    }
+
+                    SwipeableCallRow(
+                        onCall = { onCall(entry.number) },
+                        onDelete = { onDeleteCall(entry) }
+                    ) {
+                        ContactRowItem(
+                            primaryText = entry.displayName,
+                            secondaryText = detailText,
+                            photoUri = entry.photoUri,
+                            isMissed = isMissed,
+                            directionArrow = arrow,
+                            onCallClick = { onCall(entry.number) },
+                            onClick = { onOpenDetail(entry) }
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+/**
+ * Swipe right to call, swipe left to delete — a familiar call-log gesture from modern
+ * Android dialers, with a colored reveal + haptic confirmation.
+ */
+@Composable
+private fun SwipeableCallRow(
+    onCall: () -> Unit,
+    onDelete: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onCall()
+                    false // don't actually dismiss the row, just trigger the call
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onDelete()
+                    true
+                }
+                SwipeToDismissBoxValue.Settled -> true
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            val (color, icon, alignment) = when (dismissState.dismissDirection) {
+                SwipeToDismissBoxValue.StartToEnd -> Triple(
+                    MaterialTheme.colorScheme.primary, Icons.Filled.Call, Alignment.CenterStart
+                )
+                SwipeToDismissBoxValue.EndToStart -> Triple(
+                    MaterialTheme.colorScheme.error, Icons.Filled.Delete, Alignment.CenterEnd
+                )
+                SwipeToDismissBoxValue.Settled -> Triple(
+                    Color.Transparent, Icons.Filled.Call, Alignment.Center
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(color)
+                    .padding(horizontal = 24.dp),
+                contentAlignment = alignment
+            ) {
+                Icon(icon, contentDescription = null, tint = Color.White)
+            }
+        }
+    ) {
+        content()
+    }
+}
+
+private fun dayBucket(timestamp: Long): String {
+    val now = Calendar.getInstance()
+    val logTime = Calendar.getInstance().apply { timeInMillis = timestamp }
+    return when {
+        now.get(Calendar.YEAR) == logTime.get(Calendar.YEAR) &&
+            now.get(Calendar.DAY_OF_YEAR) == logTime.get(Calendar.DAY_OF_YEAR) -> "Today"
+        now.get(Calendar.YEAR) == logTime.get(Calendar.YEAR) &&
+            now.get(Calendar.DAY_OF_YEAR) - logTime.get(Calendar.DAY_OF_YEAR) == 1 -> "Yesterday"
+        else -> SimpleDateFormat("EEEE, MMM d", Locale.getDefault()).format(Date(timestamp))
     }
 }
 
@@ -209,17 +317,7 @@ private fun formatDuration(totalSeconds: Long): String {
 }
 
 private fun formatLogTimestamp(timestamp: Long): String {
-    val now = Calendar.getInstance()
-    val logTime = Calendar.getInstance().apply { timeInMillis = timestamp }
-
-    return when {
-        now.get(Calendar.DATE) == logTime.get(Calendar.DATE) ->
-            SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
-        now.get(Calendar.DAY_OF_YEAR) - logTime.get(Calendar.DAY_OF_YEAR) == 1 ->
-            "Yesterday, " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
-        else ->
-            SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(timestamp))
-    }
+    return SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
 }
 
 @Composable

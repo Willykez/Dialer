@@ -10,13 +10,18 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.telecom.TelecomManager
+import androidx.activity.BackEventCompat
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,13 +36,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import com.willykez.dialer.data.model.CallLogEntry
 import com.willykez.dialer.data.model.Contact
 import com.willykez.dialer.telecom.CallManager
@@ -83,6 +92,7 @@ class MainActivity : ComponentActivity() {
                 val app = application as DialerApplication
                 var screen by remember { mutableStateOf<Screen>(Screen.Home) }
                 var showSimSettingsPicker by remember { mutableStateOf(false) }
+                var backGestureProgress by remember { mutableFloatStateOf(0f) }
 
                 val activeTab by viewModel.activeTab.collectAsState()
                 val isDialpadOpen by viewModel.isDialpadOpen.collectAsState()
@@ -117,6 +127,25 @@ class MainActivity : ComponentActivity() {
                 val simAccounts by viewModel.simAccounts.collectAsState()
                 val preferredSimKey by viewModel.preferredSimKey.collectAsState()
                 val isDefaultDialer = viewModel.isDefaultDialer()
+
+                // Back-gesture priority, closest-to-front first: search/dialpad sheets close
+                // before the underlying screen navigates; ContactDetail/Settings pop to Home
+                // with a predictive-back scale+fade preview while the gesture is in progress.
+                BackHandler(enabled = isSearchOpen) { viewModel.setSearchOpen(false) }
+                BackHandler(enabled = isDialpadOpen && !isSearchOpen) { viewModel.setDialpadOpen(false) }
+
+                val canPopDetail = screen !is Screen.Home && !isDialpadOpen && !isSearchOpen
+                PredictiveBackHandler(enabled = canPopDetail) { progress ->
+                    try {
+                        progress.collect { event: BackEventCompat ->
+                            backGestureProgress = event.progress
+                        }
+                        backGestureProgress = 0f
+                        screen = Screen.Home
+                    } catch (e: CancellationException) {
+                        backGestureProgress = 0f
+                    }
+                }
 
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                     Scaffold(
@@ -156,7 +185,12 @@ class MainActivity : ComponentActivity() {
                                             bottom = if (isDialpadOpen) 0.dp else padding.calculateBottomPadding()
                                         )
                                     } else {
+                                        // Predictive back preview: content eases back and fades
+                                        // slightly as the user drags the system back gesture,
+                                        // reverting instantly if the gesture is cancelled.
                                         Modifier
+                                            .scale(1f - (backGestureProgress * 0.06f))
+                                            .alpha(1f - (backGestureProgress * 0.35f))
                                     }
                                 )
                         ) {
@@ -191,6 +225,9 @@ class MainActivity : ComponentActivity() {
                                             onOpenContact = { screen = Screen.ContactDetail(it) },
                                             onOpenCallDetail = { entry: CallLogEntry ->
                                                 viewModel.placeCall(entry.number)
+                                            },
+                                            onDeleteCall = { entry: CallLogEntry ->
+                                                viewModel.deleteCallLogEntry(entry.id)
                                             }
                                         )
                                     }
