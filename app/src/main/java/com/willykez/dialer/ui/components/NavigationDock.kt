@@ -60,6 +60,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.willykez.dialer.ui.theme.EmberOrange
+import com.willykez.dialer.ui.theme.EmberPink
 import com.willykez.dialer.ui.viewmodel.DialerViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -80,6 +82,7 @@ fun NavigationDock(
     onDialpadToggle: () -> Unit,
     isSearchOpen: Boolean,
     onSearchToggle: () -> Unit,
+    missedCallBadgeCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val haptics = LocalHapticFeedback.current
@@ -197,7 +200,7 @@ fun NavigationDock(
                         .width(thumbWidthDp)
                         .padding(4.dp)
                         .clip(RoundedCornerShape(22.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
+                        .background(Brush.linearGradient(listOf(EmberOrange.copy(alpha = 0.92f), EmberPink.copy(alpha = 0.92f))))
                 )
 
                 Row(modifier = Modifier.fillMaxSize()) {
@@ -208,7 +211,21 @@ fun NavigationDock(
                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onTabSelected(DialerViewModel.HomeTab.RECENTS)
                         },
-                        icon = { color -> ClockIcon(color = color, size = 20.dp) }
+                        icon = { color ->
+                            Box {
+                                ClockIcon(color = color, size = 20.dp)
+                                if (missedCallBadgeCount > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 4.dp, y = (-2).dp)
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.error)
+                                    )
+                                }
+                            }
+                        }
                     )
                     DockSegment(
                         label = "Contacts",
@@ -247,18 +264,16 @@ private fun GlassCircleButton(
     contentDescription: String,
     content: @Composable (Color) -> Unit
 ) {
-    val background = if (active) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f)
-    }
-    val tint = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onBackground
+    val tint = if (active) Color.White else MaterialTheme.colorScheme.onBackground
 
     Box(
         modifier = Modifier
             .size(56.dp)
             .clip(CircleShape)
-            .background(background)
+            .then(
+                if (active) Modifier.background(Brush.linearGradient(listOf(EmberOrange, EmberPink)))
+                else Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f))
+            )
             .border(
                 width = 1.dp,
                 brush = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent)),
@@ -288,7 +303,7 @@ private fun RowScope.DockSegment(
     val closeness = (1f - thumbDistance.coerceIn(0f, 1f))
     val contentColor = androidx.compose.ui.graphics.lerp(
         MaterialTheme.colorScheme.onSurfaceVariant,
-        MaterialTheme.colorScheme.onPrimary,
+        Color.White,
         closeness
     )
     val scale = 0.94f + (closeness * 0.10f)

@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
                 val dialpadMatches by viewModel.dialpadMatches.collectAsState()
                 val favorites by viewModel.favoriteContacts.collectAsState()
                 val recents by viewModel.recentCalls.collectAsState()
+                val missedCallBadgeCount by viewModel.missedCallBadgeCount.collectAsState()
                 val contacts by viewModel.allContacts.collectAsState()
                 val hasContactsPermission by viewModel.hasContactsPermission.collectAsState()
                 val hasCallLogPermission by viewModel.hasCallLogPermission.collectAsState()
@@ -167,7 +168,8 @@ class MainActivity : ComponentActivity() {
                                             isDialpadOpen = isDialpadOpen,
                                             onDialpadToggle = { viewModel.setDialpadOpen(!isDialpadOpen) },
                                             isSearchOpen = isSearchOpen,
-                                            onSearchToggle = { viewModel.setSearchOpen(!isSearchOpen) }
+                                            onSearchToggle = { viewModel.setSearchOpen(!isSearchOpen) },
+                                            missedCallBadgeCount = missedCallBadgeCount
                                         )
                                     }
                                 }
@@ -243,7 +245,15 @@ class MainActivity : ComponentActivity() {
                                             matchingContacts = dialpadMatches,
                                             onDigit = viewModel::appendDigit,
                                             onBackspace = viewModel::backspaceDigit,
-                                            onLongBackspace = viewModel::clearDigits,
+                                            onClearAll = viewModel::clearDigits,
+                                            onInsertPlus = { viewModel.appendDigit('+') },
+                                            onLongPressOne = { viewModel.callVoicemail() },
+                                            speedDialContacts = favorites,
+                                            onSpeedDial = { contact ->
+                                                viewModel.placeCall(contact.primaryNumber)
+                                                viewModel.clearDigits()
+                                                viewModel.setDialpadOpen(false)
+                                            },
                                             onCall = {
                                                 viewModel.placeCall(dialpadDigits)
                                                 viewModel.clearDigits()
@@ -325,6 +335,16 @@ class MainActivity : ComponentActivity() {
                             state = state,
                             onAnswer = { CallManager.answer() },
                             onDecline = { CallManager.reject() },
+                            onDeclineWithMessage = { message ->
+                                CallManager.reject()
+                                runCatching {
+                                    val smsIntent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                                        data = android.net.Uri.parse("smsto:${state.number}")
+                                        putExtra("sms_body", message)
+                                    }
+                                    startActivity(smsIntent)
+                                }
+                            },
                             onHangUp = { CallManager.hangUp() },
                             onToggleMute = { CallManager.setMuted(!state.isMuted) },
                             onToggleSpeaker = { CallManager.setSpeakerOn(!state.isSpeakerOn) },

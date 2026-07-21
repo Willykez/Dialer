@@ -1,13 +1,11 @@
 package com.willykez.dialer.ui.calling
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,7 +40,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,15 +47,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
@@ -66,11 +59,10 @@ import com.willykez.dialer.data.model.InCallStatus
 import com.willykez.dialer.data.model.InCallUiState
 import com.willykez.dialer.ui.components.ContactAvatar
 import com.willykez.dialer.ui.dialpad.DialpadKeys
-import com.willykez.dialer.ui.theme.AccentGreen
 import com.willykez.dialer.ui.theme.AccentRed
-import kotlinx.coroutines.Dispatchers
+import com.willykez.dialer.ui.theme.EmberOrange
+import com.willykez.dialer.ui.theme.EmberPink
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 /**
@@ -83,6 +75,7 @@ fun CallScreen(
     state: InCallUiState,
     onAnswer: () -> Unit,
     onDecline: () -> Unit,
+    onDeclineWithMessage: (String) -> Unit = {},
     onHangUp: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleSpeaker: () -> Unit,
@@ -92,7 +85,7 @@ fun CallScreen(
     var showKeypad by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        BlurredCallerBackdrop(photoUri = state.photoUri)
+        com.willykez.dialer.ui.components.BlurredPhotoBackdrop(photoUri = state.photoUri)
 
         Column(
             modifier = Modifier
@@ -114,6 +107,7 @@ fun CallScreen(
             ContactAvatar(
                 photoUri = state.photoUri,
                 initials = state.callerName.take(2).uppercase(),
+                ringSeed = state.callerName,
                 size = 132.dp
             )
 
@@ -150,7 +144,11 @@ fun CallScreen(
 
             AnimatedContent(targetState = state.status, label = "call_controls") { status ->
                 when (status) {
-                    InCallStatus.RINGING_INCOMING -> IncomingCallControls(onAnswer = onAnswer, onDecline = onDecline)
+                    InCallStatus.RINGING_INCOMING -> IncomingCallControls(
+                        onAnswer = onAnswer,
+                        onDecline = onDecline,
+                        onDeclineWithMessage = onDeclineWithMessage
+                    )
                     else -> ActiveCallControls(
                         state = state,
                         showKeypad = showKeypad,
@@ -166,56 +164,6 @@ fun CallScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
-    }
-}
-
-/**
- * One UI-style layered backdrop: the caller's photo, scaled up and heavily blurred, sitting
- * behind a dark scrim so foreground text stays legible. Falls back to a plain gradient when
- * there's no photo, or on API levels below 31 where Modifier.blur is a no-op.
- */
-@Composable
-private fun BlurredCallerBackdrop(photoUri: String?) {
-    val context = LocalContext.current
-    var bitmap by remember(photoUri) { mutableStateOf<Bitmap?>(null) }
-
-    LaunchedEffect(photoUri) {
-        bitmap = null
-        if (!photoUri.isNullOrBlank()) {
-            bitmap = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.openInputStream(android.net.Uri.parse(photoUri))
-                        ?.use { BitmapFactory.decodeStream(it) }
-                }.getOrNull()
-            }
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        val loaded = bitmap
-        if (loaded != null) {
-            Image(
-                bitmap = loaded.asImageBitmap(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(60.dp)
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.Black.copy(alpha = 0.55f),
-                            Color.Black.copy(alpha = 0.75f),
-                            Color.Black.copy(alpha = 0.92f)
-                        )
-                    )
-                )
-        )
     }
 }
 
@@ -240,14 +188,57 @@ private fun formatDuration(totalSeconds: Long): String {
  * call can always be rejected with a single, unambiguous tap.
  */
 @Composable
-private fun IncomingCallControls(onAnswer: () -> Unit, onDecline: () -> Unit) {
+private fun IncomingCallControls(
+    onAnswer: () -> Unit,
+    onDecline: () -> Unit,
+    onDeclineWithMessage: (String) -> Unit = {}
+) {
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
+    var showReplyOptions by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // One UI-style "reply with message" quick chips, revealed by a small toggle
+        // above the slider instead of a hidden swipe-up gesture, so it stays discoverable.
+        androidx.compose.animation.AnimatedVisibility(visible = showReplyOptions) {
+            Column(
+                modifier = Modifier.padding(bottom = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                listOf(
+                    "Can't talk now, call you later",
+                    "I'll call you back",
+                    "On my way"
+                ).forEach { message ->
+                    Box(
+                        modifier = Modifier
+                            .padding(vertical = 4.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.White.copy(alpha = 0.14f))
+                            .clickable {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onDeclineWithMessage(message)
+                            }
+                            .padding(horizontal = 20.dp, vertical = 10.dp)
+                    ) {
+                        Text(text = message, color = Color.White)
+                    }
+                }
+            }
+        }
+
+        Text(
+            text = if (showReplyOptions) "Hide quick replies \u25be" else "Reply with a message \u25b4",
+            color = Color.White.copy(alpha = 0.7f),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier
+                .padding(bottom = 12.dp)
+                .clickable { showReplyOptions = !showReplyOptions }
+        )
+
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
@@ -281,7 +272,7 @@ private fun IncomingCallControls(onAnswer: () -> Unit, onDecline: () -> Unit) {
                         .offset { androidx.compose.ui.unit.IntOffset(dragX.value.roundToInt(), 0) }
                         .size(puckSizeDp)
                         .clip(CircleShape)
-                        .background(AccentGreen)
+                        .background(Brush.linearGradient(listOf(EmberOrange, EmberPink)))
                         .pointerInput(maxDragPx) {
                             detectHorizontalDragGestures(
                                 onDragEnd = {
@@ -430,15 +421,18 @@ private fun OneUiControlTile(
 ) {
     val background = when {
         !enabled -> Color.White.copy(alpha = 0.05f)
-        selected -> MaterialTheme.colorScheme.primary
+        selected -> null
         else -> Color.White.copy(alpha = 0.12f)
     }
-    val tint = if (selected && enabled) MaterialTheme.colorScheme.onPrimary else Color.White
+    val tint = if (selected && enabled) Color.White else Color.White
 
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(24.dp))
-            .background(background),
+            .then(
+                if (background != null) Modifier.background(background)
+                else Modifier.background(Brush.linearGradient(listOf(EmberOrange, EmberPink)))
+            ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.padding(top = 12.dp)) {

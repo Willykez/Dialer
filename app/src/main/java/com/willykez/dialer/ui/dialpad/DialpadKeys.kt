@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,39 +27,37 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.willykez.dialer.data.model.Contact
+import com.willykez.dialer.ui.theme.EmberOrange
+import com.willykez.dialer.ui.theme.EmberPink
 
 private data class DialKey(val digit: Char, val letters: String)
 
 private val keys = listOf(
-    DialKey('1', ""),
-    DialKey('2', "ABC"),
-    DialKey('3', "DEF"),
-    DialKey('4', "GHI"),
-    DialKey('5', "JKL"),
-    DialKey('6', "MNO"),
-    DialKey('7', "PQRS"),
-    DialKey('8', "TUV"),
-    DialKey('9', "WXYZ"),
-    DialKey('*', ""),
-    DialKey('0', "+"),
-    DialKey('#', "")
+    DialKey('1', ""), DialKey('2', "ABC"), DialKey('3', "DEF"),
+    DialKey('4', "GHI"), DialKey('5', "JKL"), DialKey('6', "MNO"),
+    DialKey('7', "PQRS"), DialKey('8', "TUV"), DialKey('9', "WXYZ"),
+    DialKey('*', ""), DialKey('0', "+"), DialKey('#', "")
 )
 
 /**
- * A Material 3 Expressive T9 keypad: keys "melt" from circles into rounder squircles under
- * finger pressure (a subtle morph, echoing the liquid-glass motion used in the nav pill),
- * with per-key press scale + haptic tick, matching the tactile feel of the modern
- * Google Phone / Pixel dialer keypad.
+ * Ember keypad: keys sit as plain outlined circles at rest (quiet, not boxy card tiles) and
+ * flare into a filled Ember gradient + squircle morph under finger pressure. Long-press 1
+ * dials voicemail, long-press 2-9 speed-dials the Nth favorite (small dot marks assigned keys).
  */
 @Composable
 fun DialpadKeys(
     onDigit: (Char) -> Unit,
     onLongPressZero: () -> Unit = {},
+    onLongPressOne: () -> Unit = {},
+    speedDialContacts: List<Contact> = emptyList(),
+    onSpeedDial: (Contact) -> Unit = {},
     showLetters: Boolean = true,
     keySize: Dp = 76.dp,
     modifier: Modifier = Modifier
@@ -72,18 +72,23 @@ fun DialpadKeys(
         keys.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 row.forEach { key ->
+                    val speedDialIndex = if (key.digit in '2'..'9') key.digit - '2' else -1
+                    val assignedContact = speedDialIndex.takeIf { it in speedDialContacts.indices }?.let { speedDialContacts[it] }
+
                     DialKeyButton(
                         key = key,
                         size = keySize,
                         showLetters = showLetters,
+                        hasSpeedDial = assignedContact != null,
                         onClick = {
                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onDigit(key.digit)
                         },
                         onLongPress = {
-                            if (key.digit == '0') {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onLongPressZero()
+                            when {
+                                key.digit == '0' -> { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onLongPressZero() }
+                                key.digit == '1' -> { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onLongPressOne() }
+                                assignedContact != null -> { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onSpeedDial(assignedContact) }
                             }
                         }
                     )
@@ -98,13 +103,13 @@ private fun DialKeyButton(
     key: DialKey,
     size: Dp,
     showLetters: Boolean,
+    hasSpeedDial: Boolean,
     onClick: () -> Unit,
     onLongPress: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Expressive "liquid" morph: rounder squircle + slight shrink while pressed.
     val cornerRadius by animateFloatAsState(
         targetValue = if (isPressed) size.value * 0.30f else size.value * 0.5f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f),
@@ -115,10 +120,10 @@ private fun DialKeyButton(
         animationSpec = spring(dampingRatio = 0.45f, stiffness = 500f),
         label = "key_scale"
     )
-    val containerColor by animateFloatAsState(
+    val fillAmount by animateFloatAsState(
         targetValue = if (isPressed) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.6f, stiffness = 380f),
-        label = "key_color"
+        label = "key_fill"
     )
 
     Box(
@@ -126,13 +131,8 @@ private fun DialKeyButton(
             .size(size)
             .scale(pressScale)
             .clip(RoundedCornerShape(cornerRadius.dp))
-            .background(
-                androidx.compose.ui.graphics.lerp(
-                    MaterialTheme.colorScheme.surfaceContainer,
-                    MaterialTheme.colorScheme.primaryContainer,
-                    containerColor
-                )
-            )
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .background(Brush.linearGradient(listOf(EmberOrange.copy(alpha = fillAmount), EmberPink.copy(alpha = fillAmount))))
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = ripple(),
@@ -155,6 +155,17 @@ private fun DialKeyButton(
                     letterSpacing = 1.5.sp
                 )
             }
+        }
+
+        if (hasSpeedDial) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = (size.value / 10f).dp)
+                    .size(4.dp)
+                    .clip(CircleShape)
+                    .background(EmberOrange)
+            )
         }
     }
 }

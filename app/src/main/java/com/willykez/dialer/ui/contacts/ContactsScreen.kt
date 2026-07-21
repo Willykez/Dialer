@@ -1,6 +1,7 @@
 package com.willykez.dialer.ui.contacts
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +15,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -42,10 +45,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.willykez.dialer.data.model.Contact
+import com.willykez.dialer.ui.components.ContactAvatar
 import com.willykez.dialer.ui.components.ContactRowItem
+import com.willykez.dialer.ui.components.EditorialHeader
 import com.willykez.dialer.ui.recents.EmptyState
 import com.willykez.dialer.ui.recents.PermissionPrompt
 import kotlinx.coroutines.launch
@@ -63,43 +69,29 @@ fun ContactsScreen(
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+    Column(modifier = modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+        EditorialHeader(
+            title = "Contacts",
+            subtitle = if (contacts.isNotEmpty()) "${contacts.size} people" else null
         ) {
-            Text(text = "Contacts", style = MaterialTheme.typography.headlineLarge)
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = {
-                    val intent = android.content.Intent(android.content.Intent.ACTION_INSERT).apply {
-                        type = android.provider.ContactsContract.Contacts.CONTENT_TYPE
-                    }
-                    context.startActivity(intent)
-                }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Contact", tint = MaterialTheme.colorScheme.onBackground)
+            IconButton(onClick = {
+                val intent = android.content.Intent(android.content.Intent.ACTION_INSERT).apply {
+                    type = android.provider.ContactsContract.Contacts.CONTENT_TYPE
                 }
-
-                Box {
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = MaterialTheme.colorScheme.onBackground)
-                    }
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false },
-                        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Settings") },
-                            onClick = {
-                                menuExpanded = false
-                                onOpenSettings()
-                            }
-                        )
-                    }
+                context.startActivity(intent)
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "Add Contact", tint = MaterialTheme.colorScheme.onBackground)
+            }
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = MaterialTheme.colorScheme.onBackground)
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                ) {
+                    DropdownMenuItem(text = { Text("Settings") }, onClick = { menuExpanded = false; onOpenSettings() })
                 }
             }
         }
@@ -108,7 +100,6 @@ fun ContactsScreen(
             PermissionPrompt(message = "Allow access to contacts to see your address book.", onGrant = onRequestPermission)
             return
         }
-
         if (contacts.isEmpty()) {
             EmptyState(text = "No contacts found")
             return
@@ -119,22 +110,16 @@ fun ContactsScreen(
             .groupBy { it.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "#" }
             .toSortedMap()
 
-        // Flat list of (sectionHeader?, contact?) so we can map a letter -> the item index
-        // it starts at, for the fast-scroll index on the right edge.
         data class Row(val header: String? = null, val contact: Contact? = null)
 
         val flatItems = buildList {
-            if (favorites.isNotEmpty()) {
-                add(Row(header = "Favorite Contacts"))
-                favorites.forEach { add(Row(contact = it)) }
-            }
             grouped.forEach { (header, itemsInGroup) ->
                 add(Row(header = header))
                 itemsInGroup.forEach { add(Row(contact = it)) }
             }
         }
         val letterIndexPositions = remember(grouped.keys) {
-            var runningIndex = if (favorites.isNotEmpty()) 1 + favorites.size else 0
+            var runningIndex = 0
             val map = linkedMapOf<String, Int>()
             grouped.forEach { (header, itemsInGroup) ->
                 map[header] = runningIndex
@@ -150,34 +135,27 @@ fun ContactsScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize().padding(end = 24.dp),
+                modifier = Modifier.fillMaxSize().padding(end = 22.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 100.dp)
+                contentPadding = PaddingValues(bottom = 110.dp, top = 4.dp)
             ) {
+                if (favorites.isNotEmpty()) {
+                    item { QuickDialStrip(favorites = favorites, onOpenContact = onOpenContact) }
+                }
+
                 items(flatItems.size) { index ->
                     val row = flatItems[index]
                     when {
-                        row.header != null -> {
-                            SectionHeader(row.header)
-                        }
-                        row.contact != null -> {
-                            ContactRowItem(
-                                primaryText = row.contact.displayName,
-                                secondaryText = row.contact.primaryNumber,
-                                photoUri = row.contact.photoUri,
-                                onCallClick = { onOpenContact(row.contact) },
-                                onClick = { onOpenContact(row.contact) }
-                            )
-                        }
+                        row.header != null -> SectionHeader(row.header)
+                        row.contact != null -> ContactRowNoCall(contact = row.contact, onClick = { onOpenContact(row.contact) })
                     }
                 }
             }
 
-            // Fast-scroll A-Z index, One UI / classic Contacts app style: drag down the
-            // right edge to jump straight to a letter section, with a haptic tick per letter.
             if (letterIndexPositions.isNotEmpty()) {
                 var activeLetter by remember { mutableStateOf<String?>(null) }
                 val letters = letterIndexPositions.keys.toList()
+                val favoritesOffset = if (favorites.isNotEmpty()) 1 else 0
 
                 Column(
                     modifier = Modifier
@@ -197,7 +175,7 @@ fun ContactsScreen(
                                     activeLetter = letter
                                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     letterIndexPositions[letter]?.let { targetIndex ->
-                                        scope.launch { listState.scrollToItem(targetIndex) }
+                                        scope.launch { listState.scrollToItem(targetIndex + favoritesOffset) }
                                     }
                                 }
                             }
@@ -210,15 +188,65 @@ fun ContactsScreen(
                             text = letter,
                             fontSize = 10.sp,
                             fontWeight = if (letter == activeLetter) FontWeight.Bold else FontWeight.Normal,
-                            color = if (letter == activeLetter) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
+                            color = if (letter == activeLetter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Horizontal "Quick Dial" strip: a graphic, One UI-style row of favorite avatars up top,
+ * distinct from the alphabetical list below rather than folded into it.
+ */
+@Composable
+private fun QuickDialStrip(favorites: List<Contact>, onOpenContact: (Contact) -> Unit) {
+    Column(modifier = Modifier.padding(bottom = 8.dp)) {
+        Text(
+            text = "QUICK DIAL",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 10.dp, start = 2.dp)
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            items(favorites, key = { it.contactId }) { contact ->
+                Column(
+                    modifier = Modifier.widthIn(max = 68.dp).clickable { onOpenContact(contact) },
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    ContactAvatar(photoUri = contact.photoUri, initials = contact.initials, ringSeed = contact.displayName, size = 60.dp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = contact.displayName.substringBefore(" "),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** A lighter row (no call button) for the plain alphabetical list, tapping opens the profile. */
+@Composable
+private fun ContactRowNoCall(contact: Contact, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable { onClick() }
+            .padding(vertical = 10.dp, horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ContactAvatar(photoUri = contact.photoUri, initials = contact.initials, ringSeed = contact.displayName, size = 46.dp)
+        Spacer(modifier = Modifier.width(14.dp))
+        Column {
+            Text(contact.displayName, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
+            Text(contact.primaryNumber, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -229,7 +257,7 @@ private fun SectionHeader(text: String) {
         text = text,
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp)
+        color = com.willykez.dialer.ui.theme.EmberOrange,
+        modifier = Modifier.padding(vertical = 4.dp, horizontal = 8.dp)
     )
 }

@@ -2,7 +2,6 @@
 
 package com.willykez.dialer.ui.recents
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,16 +17,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.stickyHeader
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -45,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -56,6 +53,9 @@ import com.willykez.dialer.data.model.CallDirection
 import com.willykez.dialer.data.model.CallLogEntry
 import com.willykez.dialer.ui.components.CallDirectionArrow
 import com.willykez.dialer.ui.components.ContactRowItem
+import com.willykez.dialer.ui.components.EditorialHeader
+import com.willykez.dialer.ui.theme.EmberOrange
+import com.willykez.dialer.ui.theme.EmberPink
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -80,46 +80,28 @@ fun RecentsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 20.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        EditorialHeader(
+            title = "Calls",
+            subtitle = if (calls.isNotEmpty()) "${calls.size} recent" else null
         ) {
-            Text(text = "Calls", style = MaterialTheme.typography.headlineLarge)
-
             Box {
                 IconButton(onClick = { menuExpanded = true }) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Menu",
-                        tint = MaterialTheme.colorScheme.onBackground
-                    )
+                    Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = MaterialTheme.colorScheme.onBackground)
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
+                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Settings") },
-                        onClick = {
-                            menuExpanded = false
-                            onOpenSettings()
-                        }
-                    )
+                    DropdownMenuItem(text = { Text("Settings") }, onClick = { menuExpanded = false; onOpenSettings() })
                 }
             }
         }
 
         if (!hasPermission) {
-            PermissionPrompt(
-                message = "Allow access to call history to see your recent calls.",
-                onGrant = onRequestPermission
-            )
+            PermissionPrompt(message = "Allow access to call history to see your recent calls.", onGrant = onRequestPermission)
             return
         }
 
@@ -128,61 +110,35 @@ fun RecentsScreen(
             return
         }
 
-        // Group like Google Phone / One UI call log: Today, Yesterday, then calendar dates.
         val grouped = calls.groupBy { dayBucket(it.timestamp) }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            contentPadding = PaddingValues(bottom = 100.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 110.dp, top = 4.dp)
         ) {
             if (!isDefaultDialer) {
-                item {
-                    DefaultDialerBanner(onActivate = onRequestDefaultDialer)
-                }
+                item { DefaultDialerBanner(onActivate = onRequestDefaultDialer) }
             }
 
             grouped.forEach { (bucket, entries) ->
-                item(key = "header_$bucket") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background)
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = bucket,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                stickyHeader {
+                    Box(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(vertical = 6.dp)) {
+                        DateBucketChip(bucket)
                     }
                 }
 
                 items(entries, key = { it.id }) { entry ->
                     val isMissed = entry.direction == CallDirection.MISSED || entry.direction == CallDirection.REJECTED
-                    val arrow = if (entry.direction == CallDirection.OUTGOING) {
-                        CallDirectionArrow.OUTGOING
-                    } else {
-                        CallDirectionArrow.INCOMING
-                    }
+                    val arrow = if (entry.direction == CallDirection.OUTGOING) CallDirectionArrow.OUTGOING else CallDirectionArrow.INCOMING
                     val simLabel = simLabels[entry.phoneAccountId]
                     val detailText = buildString {
                         append(formatLogTimestamp(entry.timestamp))
-                        if (entry.durationSeconds > 0) {
-                            append(" \u2022 ")
-                            append(formatDuration(entry.durationSeconds))
-                        }
-                        if (!simLabel.isNullOrBlank()) {
-                            append(" \u2022 ")
-                            append(simLabel)
-                        }
+                        if (entry.durationSeconds > 0) { append(" \u2022 "); append(formatDuration(entry.durationSeconds)) }
+                        if (!simLabel.isNullOrBlank()) { append(" \u2022 "); append(simLabel) }
                     }
 
-                    SwipeableCallRow(
-                        onCall = { onCall(entry.number) },
-                        onDelete = { onDeleteCall(entry) }
-                    ) {
+                    SwipeableCallRow(onCall = { onCall(entry.number) }, onDelete = { onDeleteCall(entry) }) {
                         ContactRowItem(
                             primaryText = entry.displayName,
                             secondaryText = detailText,
@@ -199,16 +155,21 @@ fun RecentsScreen(
     }
 }
 
-/**
- * Swipe right to call, swipe left to delete — a familiar call-log gesture from modern
- * Android dialers, with a colored reveal + haptic confirmation.
- */
+/** A small floating pill instead of a full-width sticky bar — reads as a graphic tag, not chrome. */
 @Composable
-private fun SwipeableCallRow(
-    onCall: () -> Unit,
-    onDelete: () -> Unit,
-    content: @Composable () -> Unit
-) {
+private fun DateBucketChip(text: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(text = text.uppercase(), style = MaterialTheme.typography.labelMedium, color = EmberOrange, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun SwipeableCallRow(onCall: () -> Unit, onDelete: () -> Unit, content: @Composable () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -216,7 +177,7 @@ private fun SwipeableCallRow(
                 SwipeToDismissBoxValue.StartToEnd -> {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     onCall()
-                    false // don't actually dismiss the row, just trigger the call
+                    false
                 }
                 SwipeToDismissBoxValue.EndToStart -> {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -231,23 +192,18 @@ private fun SwipeableCallRow(
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = {
-            val (color, icon, alignment) = when (dismissState.dismissDirection) {
+            val (brush, icon, alignment) = when (dismissState.dismissDirection) {
                 SwipeToDismissBoxValue.StartToEnd -> Triple(
-                    MaterialTheme.colorScheme.primary, Icons.Filled.Call, Alignment.CenterStart
+                    Brush.linearGradient(listOf(EmberOrange, EmberPink)), Icons.Filled.Call, Alignment.CenterStart
                 )
                 SwipeToDismissBoxValue.EndToStart -> Triple(
-                    MaterialTheme.colorScheme.error, Icons.Filled.Delete, Alignment.CenterEnd
+                    Brush.linearGradient(listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.error)),
+                    Icons.Filled.Delete, Alignment.CenterEnd
                 )
-                SwipeToDismissBoxValue.Settled -> Triple(
-                    Color.Transparent, Icons.Filled.Call, Alignment.Center
-                )
+                SwipeToDismissBoxValue.Settled -> Triple(Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)), Icons.Filled.Call, Alignment.Center)
             }
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(color)
-                    .padding(horizontal = 24.dp),
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(22.dp)).background(brush).padding(horizontal = 24.dp),
                 contentAlignment = alignment
             ) {
                 Icon(icon, contentDescription = null, tint = Color.White)
@@ -262,49 +218,40 @@ private fun dayBucket(timestamp: Long): String {
     val now = Calendar.getInstance()
     val logTime = Calendar.getInstance().apply { timeInMillis = timestamp }
     return when {
-        now.get(Calendar.YEAR) == logTime.get(Calendar.YEAR) &&
-            now.get(Calendar.DAY_OF_YEAR) == logTime.get(Calendar.DAY_OF_YEAR) -> "Today"
-        now.get(Calendar.YEAR) == logTime.get(Calendar.YEAR) &&
-            now.get(Calendar.DAY_OF_YEAR) - logTime.get(Calendar.DAY_OF_YEAR) == 1 -> "Yesterday"
+        now.get(Calendar.YEAR) == logTime.get(Calendar.YEAR) && now.get(Calendar.DAY_OF_YEAR) == logTime.get(Calendar.DAY_OF_YEAR) -> "Today"
+        now.get(Calendar.YEAR) == logTime.get(Calendar.YEAR) && now.get(Calendar.DAY_OF_YEAR) - logTime.get(Calendar.DAY_OF_YEAR) == 1 -> "Yesterday"
         else -> SimpleDateFormat("EEEE, MMM d", Locale.getDefault()).format(Date(timestamp))
     }
 }
 
 @Composable
 private fun DefaultDialerBanner(onActivate: () -> Unit) {
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .clickable { onActivate() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-        shape = RoundedCornerShape(16.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable { onActivate() }
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Text("System dialer inactive", color = MaterialTheme.colorScheme.onBackground, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "Set this app as your default phone app to receive calls, sync call history, and enable the full-screen incoming call UI.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(Brush.linearGradient(listOf(EmberOrange, EmberPink)))
+                .clickable { onActivate() }
+                .padding(horizontal = 20.dp, vertical = 10.dp)
         ) {
-            Text(
-                text = "System dialer inactive",
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Set this app as your default phone app to receive calls, sync call history, and enable the full-screen incoming call UI.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onActivate,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Text("Set as default dialer", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
+            Text("Set as default dialer", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
         }
     }
 }
@@ -315,52 +262,41 @@ private fun formatDuration(totalSeconds: Long): String {
     return "%d:%02d".format(minutes, seconds)
 }
 
-private fun formatLogTimestamp(timestamp: Long): String {
-    return SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
-}
+private fun formatLogTimestamp(timestamp: Long): String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(timestamp))
 
 @Composable
 fun EmptyState(text: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
+    Column(modifier = modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Box(
-            modifier = Modifier
-                .size(72.dp)
-                .background(MaterialTheme.colorScheme.surface, CircleShape),
+            modifier = Modifier.size(72.dp).clip(CircleShape).background(
+                Brush.linearGradient(listOf(EmberOrange.copy(alpha = 0.25f), EmberPink.copy(alpha = 0.25f)))
+            ),
             contentAlignment = Alignment.Center
         ) {
-            Text("\u2205", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 36.sp)
+            Text("\u2205", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 32.sp)
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = text,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
+        Text(text = text, color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
 fun PermissionPrompt(message: String, onGrant: () -> Unit, modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(32.dp),
+        modifier = modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Text(text = message, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = onGrant,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(Brush.linearGradient(listOf(EmberOrange, EmberPink)))
+                .clickable { onGrant() }
+                .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
-            Text("Grant access", color = Color.Black, fontWeight = FontWeight.Bold)
+            Text("Grant access", color = Color.White, fontWeight = FontWeight.Bold)
         }
     }
 }

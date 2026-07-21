@@ -10,6 +10,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.willykez.dialer.DialerApplication
+import com.willykez.dialer.data.model.CallDirection
 import com.willykez.dialer.data.model.CallLogEntry
 import com.willykez.dialer.data.model.Contact
 import com.willykez.dialer.data.model.SimAccount
@@ -73,6 +74,13 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
     val recentCalls: StateFlow<List<CallLogEntry>> = app.callLogRepository.observeCallLogAsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _lastSeenRecentsAt = MutableStateFlow(System.currentTimeMillis())
+
+    /** Drives the small red badge on the Recents nav icon — cleared once the tab is opened. */
+    val missedCallBadgeCount: StateFlow<Int> = combine(recentCalls, _lastSeenRecentsAt) { calls, lastSeen ->
+        calls.count { it.direction == CallDirection.MISSED && it.timestamp > lastSeen }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val favoriteContacts: StateFlow<List<Contact>> = allContacts
         .map { contacts -> contacts.filter { it.isFavorite } }
@@ -140,6 +148,9 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setActiveTab(tab: HomeTab) {
         _activeTab.value = tab
+        if (tab == HomeTab.RECENTS) {
+            _lastSeenRecentsAt.value = System.currentTimeMillis()
+        }
     }
 
     fun setDialpadOpen(open: Boolean) {
@@ -251,6 +262,22 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
         }
         try {
             telecomManager.placeCall(Uri.fromParts("tel", number, null), extras)
+        } catch (securityException: SecurityException) {
+            return
+        }
+    }
+
+    /** Classic "long-press 1 for voicemail" shortcut. */
+    fun callVoicemail() {
+        val context = getApplication<Application>()
+        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.CALL_PHONE)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+        try {
+            telecomManager.placeCall(Uri.fromParts("voicemail", "", null), null)
         } catch (securityException: SecurityException) {
             return
         }
