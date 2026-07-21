@@ -3,9 +3,7 @@ package com.willykez.dialer.ui.theme
 import android.os.Build
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -64,22 +62,19 @@ private fun ColorScheme.pinnedToAmoled(): ColorScheme = copy(
 )
 
 /**
- * M3 Expressive shape scale: rounder, more "squircle"-like at rest, echoing the liquid-glass
- * pill navigation and One UI-style call surfaces used throughout the app.
+ * Rounder-than-default shape scale, echoing the liquid-glass pill nav and One UI-style call
+ * surfaces used throughout the app. Uses only the stable 5-role Shapes constructor — the
+ * expanded Material 3 Expressive shape tokens (largeIncreased, extraExtraLarge, etc.) are
+ * still internal-only in the resolved material3 artifact, so they aren't available yet.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 val DialerShapes = Shapes(
     extraSmall = RoundedCornerShape(12.dp),
     small = RoundedCornerShape(18.dp),
     medium = RoundedCornerShape(22.dp),
     large = RoundedCornerShape(30.dp),
-    largeIncreased = RoundedCornerShape(34.dp),
-    extraLarge = RoundedCornerShape(40.dp),
-    extraLargeIncreased = RoundedCornerShape(44.dp),
-    extraExtraLarge = RoundedCornerShape(56.dp)
+    extraLarge = RoundedCornerShape(40.dp)
 )
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DialerTheme(
     useDynamicColor: Boolean = true,
@@ -95,11 +90,10 @@ fun DialerTheme(
         }
     }
 
-    MaterialExpressiveTheme(
+    MaterialTheme(
         colorScheme = colorScheme,
         typography = DialerTypography,
         shapes = DialerShapes,
-        motionScheme = MotionScheme.expressive(),
         content = content
     )
 }
