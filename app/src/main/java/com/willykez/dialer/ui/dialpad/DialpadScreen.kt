@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,7 +60,7 @@ fun DialpadScreen(
 ) {
     Column(
         modifier = modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 24.dp, vertical = 16.dp)
@@ -86,39 +85,45 @@ fun DialpadScreen(
             )
         }
 
-        AnimatedVisibility(
-            visible = digits.isNotEmpty() && matchingContacts.isNotEmpty(),
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+        // Flexible region: always fills the remaining space between the digit display and
+        // the keypad, so the sheet reaches all the way to the top of the screen (matching
+        // Google's own full-screen dialpad) whether or not there are smart-dial suggestions.
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            AnimatedVisibility(
+                visible = digits.isNotEmpty() && matchingContacts.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+                modifier = Modifier.align(Alignment.TopCenter)
             ) {
-                items(matchingContacts, key = { it.contactId }) { contact ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .clickable { onContactPicked(contact) }
-                            .padding(vertical = 8.dp, horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        ContactAvatar(photoUri = contact.photoUri, initials = contact.initials, ringSeed = contact.displayName, size = 42.dp)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(contact.displayName, color = MaterialTheme.colorScheme.onBackground)
-                            Text(contact.primaryNumber, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                        }
-                        Box(
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(matchingContacts, key = { it.contactId }) { contact ->
+                        Row(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Brush.linearGradient(listOf(EmberOrange, EmberPink)))
-                                .clickable { onContactPicked(contact) },
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { onContactPicked(contact) }
+                                .padding(vertical = 8.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Filled.Call, contentDescription = "Call ${contact.displayName}", tint = Color.White, modifier = Modifier.size(16.dp))
+                            ContactAvatar(photoUri = contact.photoUri, initials = contact.initials, ringSeed = contact.displayName, size = 42.dp)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(contact.displayName, color = MaterialTheme.colorScheme.onBackground)
+                                Text(contact.primaryNumber, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Brush.linearGradient(listOf(EmberOrange, EmberPink)))
+                                    .clickable { onContactPicked(contact) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Filled.Call, contentDescription = "Call ${contact.displayName}", tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
                         }
                     }
                 }

@@ -1,5 +1,9 @@
+@file:OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+
 package com.willykez.dialer.ui.contacts
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -64,6 +68,8 @@ fun ContactsScreen(
     onRequestPermission: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenContact: (Contact) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -140,14 +146,26 @@ fun ContactsScreen(
                 contentPadding = PaddingValues(bottom = 110.dp, top = 4.dp)
             ) {
                 if (favorites.isNotEmpty()) {
-                    item { QuickDialStrip(favorites = favorites, onOpenContact = onOpenContact) }
+                    item {
+                        QuickDialStrip(
+                            favorites = favorites,
+                            onOpenContact = onOpenContact,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                    }
                 }
 
                 items(flatItems.size) { index ->
                     val row = flatItems[index]
                     when {
                         row.header != null -> SectionHeader(row.header)
-                        row.contact != null -> ContactRowNoCall(contact = row.contact, onClick = { onOpenContact(row.contact) })
+                        row.contact != null -> ContactRowNoCall(
+                            contact = row.contact,
+                            onClick = { onOpenContact(row.contact) },
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
                     }
                 }
             }
@@ -198,11 +216,37 @@ fun ContactsScreen(
 }
 
 /**
+ * Builds the shared-element modifier that makes a contact's avatar visually "fly" from
+ * wherever it's tapped (Quick Dial strip or the alphabetical list) into the Contact Detail
+ * hero position. Falls back to a no-op modifier when no transition scope is available
+ * (e.g. this composable is previewed standalone).
+ */
+@Composable
+private fun avatarSharedModifier(
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope?,
+    contactId: Long
+): Modifier {
+    if (sharedTransitionScope == null || animatedVisibilityScope == null) return Modifier
+    return with(sharedTransitionScope) {
+        Modifier.sharedElement(
+            rememberSharedContentState(key = "avatar-$contactId"),
+            animatedVisibilityScope = animatedVisibilityScope
+        )
+    }
+}
+
+/**
  * Horizontal "Quick Dial" strip: a graphic, One UI-style row of favorite avatars up top,
  * distinct from the alphabetical list below rather than folded into it.
  */
 @Composable
-private fun QuickDialStrip(favorites: List<Contact>, onOpenContact: (Contact) -> Unit) {
+private fun QuickDialStrip(
+    favorites: List<Contact>,
+    onOpenContact: (Contact) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
+) {
     Column(modifier = Modifier.padding(bottom = 8.dp)) {
         Text(
             text = "QUICK DIAL",
@@ -216,7 +260,13 @@ private fun QuickDialStrip(favorites: List<Contact>, onOpenContact: (Contact) ->
                     modifier = Modifier.widthIn(max = 68.dp).clickable { onOpenContact(contact) },
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    ContactAvatar(photoUri = contact.photoUri, initials = contact.initials, ringSeed = contact.displayName, size = 60.dp)
+                    ContactAvatar(
+                        photoUri = contact.photoUri,
+                        initials = contact.initials,
+                        ringSeed = contact.displayName,
+                        size = 60.dp,
+                        modifier = avatarSharedModifier(sharedTransitionScope, animatedVisibilityScope, contact.contactId)
+                    )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = contact.displayName.substringBefore(" "),
@@ -233,7 +283,12 @@ private fun QuickDialStrip(favorites: List<Contact>, onOpenContact: (Contact) ->
 
 /** A lighter row (no call button) for the plain alphabetical list, tapping opens the profile. */
 @Composable
-private fun ContactRowNoCall(contact: Contact, onClick: () -> Unit) {
+private fun ContactRowNoCall(
+    contact: Contact,
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -242,7 +297,13 @@ private fun ContactRowNoCall(contact: Contact, onClick: () -> Unit) {
             .padding(vertical = 10.dp, horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ContactAvatar(photoUri = contact.photoUri, initials = contact.initials, ringSeed = contact.displayName, size = 46.dp)
+        ContactAvatar(
+            photoUri = contact.photoUri,
+            initials = contact.initials,
+            ringSeed = contact.displayName,
+            size = 46.dp,
+            modifier = avatarSharedModifier(sharedTransitionScope, animatedVisibilityScope, contact.contactId)
+        )
         Spacer(modifier = Modifier.width(14.dp))
         Column {
             Text(contact.displayName, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)

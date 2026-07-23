@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+
 package com.willykez.dialer
 
 import android.app.role.RoleManager
@@ -19,20 +21,26 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -148,9 +156,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                     Scaffold(
-                        containerColor = Color.Black,
+                        containerColor = MaterialTheme.colorScheme.background,
                         bottomBar = {
                             if (screen is Screen.Home) {
                                 Box(
@@ -179,7 +187,7 @@ class MainActivity : ComponentActivity() {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black)
+                                .background(MaterialTheme.colorScheme.background)
                                 .then(
                                     if (screen is Screen.Home) {
                                         Modifier.padding(
@@ -196,7 +204,15 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                         ) {
-                            when (val current = screen) {
+                            SharedTransitionLayout {
+                                AnimatedContent(
+                                    targetState = screen,
+                                    label = "screen_transition",
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(160)) togetherWith fadeOut(animationSpec = tween(160))
+                                    }
+                                ) { current ->
+                                when (current) {
                                 is Screen.Home -> {
                                     if (isSearchOpen) {
                                         SearchScreen(
@@ -230,7 +246,9 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onDeleteCall = { entry: CallLogEntry ->
                                                 viewModel.deleteCallLogEntry(entry.id)
-                                            }
+                                            },
+                                            sharedTransitionScope = this@SharedTransitionLayout,
+                                            animatedVisibilityScope = this@AnimatedContent
                                         )
                                     }
 
@@ -238,7 +256,7 @@ class MainActivity : ComponentActivity() {
                                         visible = isDialpadOpen,
                                         enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                                         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-                                        modifier = Modifier.align(Alignment.BottomCenter)
+                                        modifier = Modifier.fillMaxSize()
                                     ) {
                                         DialpadScreen(
                                             digits = dialpadDigits,
@@ -300,7 +318,9 @@ class MainActivity : ComponentActivity() {
                                         } else {
                                             app.blockedNumberRepository.block(number)
                                         }
-                                    }
+                                    },
+                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                    animatedVisibilityScope = this@AnimatedContent
                                 )
                                 is Screen.Settings -> SettingsScreen(
                                     isDefaultDialer = isDefaultDialer,
@@ -326,6 +346,8 @@ class MainActivity : ComponentActivity() {
                                     onUnblock = { app.blockedNumberRepository.unblock(it) },
                                     onPickDefaultSim = { showSimSettingsPicker = true }
                                 )
+                                }
+                                }
                             }
                         }
                     }

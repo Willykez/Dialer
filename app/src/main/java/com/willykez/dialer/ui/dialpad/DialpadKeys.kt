@@ -110,14 +110,13 @@ private fun DialKeyButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val cornerRadius by animateFloatAsState(
-        targetValue = if (isPressed) size.value * 0.30f else size.value * 0.5f,
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f),
-        label = "key_corner"
-    )
+    // A fixed, Google Dialer-style rounded-rectangle key — not a circle — so the grid reads
+    // as a tight, consistent keypad rather than a ring of separate coins.
+    val keyCornerRadius = size * 0.30f
+
     val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.90f else 1f,
-        animationSpec = spring(dampingRatio = 0.45f, stiffness = 500f),
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 500f),
         label = "key_scale"
     )
     val fillAmount by animateFloatAsState(
@@ -130,7 +129,7 @@ private fun DialKeyButton(
         modifier = Modifier
             .size(size)
             .scale(pressScale)
-            .clip(RoundedCornerShape(cornerRadius.dp))
+            .clip(RoundedCornerShape(keyCornerRadius))
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .background(Brush.linearGradient(listOf(EmberOrange.copy(alpha = fillAmount), EmberPink.copy(alpha = fillAmount))))
             .combinedClickable(
@@ -157,14 +156,16 @@ private fun DialKeyButton(
             }
         }
 
+        // Speed-dial marker: a small corner badge (distinct from Google's own decorative
+        // dot under the letters) so it never reads as stock keypad chrome.
         if (hasSpeedDial) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = (size.value / 10f).dp)
-                    .size(4.dp)
+                    .align(Alignment.TopEnd)
+                    .padding(top = (size.value / 14f).dp, end = (size.value / 14f).dp)
+                    .size(6.dp)
                     .clip(CircleShape)
-                    .background(EmberOrange)
+                    .background(Brush.linearGradient(listOf(EmberOrange, EmberPink)))
             )
         }
     }

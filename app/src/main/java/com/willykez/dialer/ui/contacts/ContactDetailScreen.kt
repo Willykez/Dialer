@@ -1,5 +1,9 @@
+@file:OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+
 package com.willykez.dialer.ui.contacts
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,6 +62,8 @@ fun ContactDetailScreen(
     onToggleFavorite: () -> Unit,
     onPickRingtone: () -> Unit,
     onToggleBlock: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -88,7 +94,22 @@ fun ContactDetailScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                ContactAvatar(photoUri = contact.photoUri, initials = contact.initials, ringSeed = contact.displayName, size = 104.dp)
+                ContactAvatar(
+                    photoUri = contact.photoUri,
+                    initials = contact.initials,
+                    ringSeed = contact.displayName,
+                    size = 104.dp,
+                    modifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedElement(
+                                rememberSharedContentState(key = "avatar-${contact.contactId}"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
                 Spacer(modifier = Modifier.height(14.dp))
                 Text(text = contact.displayName, style = MaterialTheme.typography.headlineMedium, color = Color.White)
 

@@ -10,6 +10,16 @@ val InteractiveTrack = Color(0xFF2A2A2A)
 val ActivePillState = Color(0xFF171717)
 val OutlineDim = Color(0xFF2A2A2A)
 
+// Light-mode surfaces — a soft lavender-white, not stark white, echoing the gentle tint
+// Google's Phone app uses instead of a flat #FFFFFF background.
+val SurfaceLightBackground = Color(0xFFEAE7F4)
+val SurfaceLightContainer = Color(0xFFFFFFFF)
+val SurfaceLightContainerHigh = Color(0xFFDDD8EF)
+val SurfaceLightContainerHighest = Color(0xFFCCC6E6)
+val OutlineLight = Color(0xFFC9C4DE)
+val TextHighOnLight = Color(0xFF1A1A1E)
+val TextMediumOnLight = Color(0xFF5C5A66)
+
 val AccentGreen = Color(0xFF10B981)
 val AccentGreenDark = Color(0xFF0E9A6E)
 val AccentRed = Color(0xFFFF4A4A)

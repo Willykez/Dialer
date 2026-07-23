@@ -1,5 +1,8 @@
 package com.willykez.dialer.ui.home
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -9,6 +12,7 @@ import com.willykez.dialer.ui.contacts.ContactsScreen
 import com.willykez.dialer.ui.recents.RecentsScreen
 import com.willykez.dialer.ui.viewmodel.DialerViewModel
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
     activeTab: DialerViewModel.HomeTab,
@@ -27,6 +31,8 @@ fun HomeScreen(
     onOpenContact: (Contact) -> Unit,
     onOpenCallDetail: (CallLogEntry) -> Unit,
     onDeleteCall: (CallLogEntry) -> Unit = {},
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     modifier: Modifier = Modifier
 ) {
     when (activeTab) {
@@ -50,6 +56,8 @@ fun HomeScreen(
             onRequestPermission = onRequestContactsPermission,
             onOpenSettings = onOpenSettings,
             onOpenContact = onOpenContact,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
             modifier = modifier.fillMaxSize()
         )
     }
